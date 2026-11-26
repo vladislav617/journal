@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Моя школа — электронный журнал</title>
+<link rel="manifest" href='data:application/manifest+json,{"name":"Моя школа","short_name":"Журнал","start_url":".","display":"standalone","background_color":"#3b6fd4","theme_color":"#3b6fd4","icons":[{"src":"data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2712%27 fill=%27%233b6fd4%27/%3E%3Ctext x=%2732%27 y=%2744%27 font-size=%2732%27 text-anchor=%27middle%27 fill=%27white%27%3EШ%3C/text%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml"}]}'>
+<script>
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+</script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<style>
+  :root {
+    --blue: #3b6fd4; --blue-dark: #2c55a8;
+    --green: #2e9e6b; --orange: #e8912d;
+    --red: #d64545; --purple: #8e5cc9;
+    --bg: #eef2f7; --card: #ffffff;
+    --text: #2d3a4a; --muted: #8494a7;
+    --line: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    margin: 0; padding: 16px; background: var(--bg); color: var(--text);
+  }
+  header {
+    background: linear-gradient(120deg, #2c55a8 0%, #3b6fd4 55%, #6a8ee0 100%);
+    color: #fff; border-radius: 16px; padding: 20px 28px;
+    display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    box-shadow: 0 6px 20px rgba(44,85,168,.25);
+  }
+  header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+  header .subtitle { font-size: 13px; opacity: .85; margin-top: 4px; }
+  #whoAmI { font-size: 14px; text-align: right; }
+  #whoAmI .name { font-weight: 600; }
+  #whoAmI button {
+    background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.4);
+    border-radius: 8px; padding: 5px 14px; cursor: pointer; margin-left: 8px; font-size: 13px;
+  }
+  #whoAmI button:hover { background: rgba(255,255,255,.3); }
+
+  nav { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px; }
+  nav button {
+    padding: 10px 16px; border: none; border-radius: 10px 10px 0 0;
+    background: #dde5f0; color: var(--text); cursor: pointer; font-size: 14px;
+  }
+  nav button:hover { background: #cdd9ec; }
+  nav button.active {
+    background: var(--card); color: var(--blue-dark); font-weight: 600;
+    box-shadow: 0 -2px 8px rgba(0,0,0,.06);
+  }
+
+  .toolbar { margin: 0; padding: 12px 16px; background: var(--card);
+             border-radius: 0 12px 12px 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06);
+             display: flex; flex-wrap: wrap; gap: 8px; }
+  .toolbar button {
+    padding: 9px 16px; border: none; border-radius: 9px; cursor: pointer;
+    font-size: 13.5px; transition: transform .1s, box-shadow .1s;
+  }
+  .toolbar button:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,.15); }
+  #btnExport   { background: var(--green);  color: #fff; }
+  #btnImport   { background: var(--purple); color: #fff; }
+  #btnTemplate { background: var(--orange); color: #fff; }
+  #btnDocx     { background: #4a7ec2;       color: #fff; }
+  #btnAddTeacherWrap { background: #1a8f8f; color: #fff; }
+  #btnChangePass     { background: #8494a7; color: #fff; }
+
+  section {
+    display: none; background: var(--card); padding: 24px;
+    border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    margin-top: 16px;
+  }
+  section.active { display: block; animation: fadeIn .2s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; } }
+
+  section h2 {
+    margin: 0 0 16px; font-size: 19px; color: var(--blue-dark);
+    border-bottom: 2px solid var(--line); padding-bottom: 10px;
+  }
+  section h3 { color: var(--blue-dark); font-size: 16px; }
+
+  input, select {
+    padding: 8px 10px; margin: 3px 4px 3px 0; border: 1px solid #cfd8e3;
+    border-radius: 8px; font-size: 14px; background: #fbfcfe;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--blue); }
+  button.save {
+    background: var(--green); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 18px; cursor: pointer; font-size: 14px;
+  }
+  button.save:hover { filter: brightness(1.08); }
+  button.saveall {
+    background: linear-gradient(120deg, var(--orange), #f0a94f); color: #fff; border: none;
+    border-radius: 10px; padding: 11px 28px; cursor: pointer; font-weight: 600; font-size: 15px;
+    box-shadow: 0 3px 10px rgba(232,145,45,.35);
+  }
+
+  .formRow { background: #f5f8fc; border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; }
+  .label { font-weight: 600; color: #4a5a6d; }
+
+  .table-wrapper { overflow-x: auto; border-radius: 10px; margin-top: 10px; }
+  table { border-collapse: collapse; font-size: 14px; }
+  .table-wrapper table { width: 100%; }
+  th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: center; }
+  th { background: linear-gradient(#f2f6fb, #e8eef6); color: #3a4a5d; font-weight: 600; }
+  tr:nth-child(even) td { background: #fafcfe; }
+  tr:hover td { background: #eef4fd; }
+  .del { color: var(--red); cursor: pointer; font-weight: bold; }
+
+  .grid-table { min-width: 640px; }
+  .grid-table th.datecol { padding: 6px 4px; font-size: 13px; min-width: 46px; cursor: pointer; }
+  .grid-table th.datecol:hover { background: #dbe7fb; }
+  .grid-table th.datecol .lessonNum { font-size: 10px; color: var(--muted); font-weight: 400; }
+  .grid-table th.datecol .lessonType { font-size: 10px; color: var(--purple); font-weight: 700; }
+  .grid-table td.namecol { text-align: left; white-space: nowrap; font-weight: 500; }
+  .grid-table td.topicRow { text-align: left; font-size: 11px; color: var(--muted); background: #fbfcff; }
+  .cellMark { cursor: pointer; min-width: 44px; height: 34px; font-weight: 600; color: var(--blue-dark); }
+  .cellMark:hover { background: #e3edfd !important; box-shadow: inset 0 0 0 2px var(--blue); }
+  .cellAbs {
+    cursor: pointer; min-width: 44px; height: 34px;
+    background: var(--red) !important; color: #fff; font-weight: 700; font-size: 13px;
+  }
+  .cellAbs:hover { filter: brightness(1.12); }
+  .cellQ { cursor: pointer; font-weight: 700; color: var(--green); background: #f2faf6; }
+  .cellYear { cursor: pointer; font-weight: 800; color: #fff; background: var(--blue-dark) !important; }
+  .cellAvg { font-weight: 700; background: #f4f8f4 !important; }
+  .gridHint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+
+  .absentMark {
+    background: var(--red); color: #fff; padding: 2px 9px; border-radius: 10px;
+    font-size: 11.5px; font-weight: 600; margin-left: 6px; white-space: nowrap;
+  }
+  .topicNote {
+    color: var(--muted); font-style: italic; background: #f6f9fd;
+    border-left: 3px solid var(--blue); padding: 8px 12px; border-radius: 0 8px 8px 0;
+  }
+
+  #authOverlay {
+    position: fixed; inset: 0;
+    background: linear-gradient(135deg, #24407e 0%, #3b6fd4 60%, #6a8ee0 100%);
+    display: flex; align-items: center; justify-content: center; z-index: 100;
+    overflow-y: auto; padding: 16px;
+  }
+  .authCard {
+    background: #fff; padding: 36px 44px; border-radius: 18px; text-align: center;
+    min-width: 320px; max-width: 92vw; box-shadow: 0 20px 60px rgba(0,0,0,.35);
+  }
+  .authCard h2 { color: var(--blue-dark); margin-top: 0; }
+  .authCard .field { margin: 10px 0; }
+  .authCard input { padding: 10px; width: 220px; text-align: center; }
+  #authMsg, #regMsg { color: var(--red); font-size: 13px; min-height: 18px; }
+  .authLink { font-size: 13px; margin-top: 10px; }
+  .authLink a { color: var(--blue-dark); font-weight: 600; }
+  .empty { color: var(--muted); font-style: italic; padding: 16px; text-align: center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🏫 Моя школа</h1>
+    <div class="subtitle">Электронный журнал: оценки • пропуски • ДЗ • КТП</div>
+  </div>
+  <div id="whoAmI"></div>
+</header>
+
+<!-- ЭКРАН ВХОДА -->
+<div id="authOverlay">
+  <div class="authCard">
+    <h2>Вход в журнал «Моя школа»</h2>
+    <div id="loginBlock" style="display:none">
+      <div class="field">Имя учителя: <input id="authName" placeholder="Иванова А. П." onkeydown="if(event.key==='Enter')document.getElementById('authPass').focus()"></div>
+      <div class="field">Пароль: <input id="authPass" type="password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <label style="font-size:13px"><input type="checkbox" id="rememberMe"> Запомнить меня на этом устройстве</label>
+      <div><button class="save" onclick="doLogin()">Войти</button></div>
+      <div id="authMsg"></div>
+      <p class="authLink"><a href="#" onclick="showRegister();return false">Создать нового учителя</a></p>
+    </div>
+    <div id="registerBlock" style="display:none">
+      <p><b>Первый запуск на этом устройстве.</b><br>
+      Придумайте имя и пароль учителя.<br>
+      Если у вас уже есть аккаунт на другом устройстве — нажмите «Есть аккаунт» ниже и войдите тем же именем и паролем.</p>
+      <div class="field">Ваше имя: <input id="regName" placeholder="Иванова А. П."></div>
+      <div class="field">Пароль: <input id="regPass" type="password"></div>
+      <div><button class="save" onclick="doRegister()">Создать учителя</button></div>
+      <div id="regMsg"></div>
+      <p class="authLink"><a href="#" onclick="showLogin();return false"><b>Есть аккаунт — войти</b></a></p>
+    </div>
+  </div>
+</div>
+
+<nav>
+  <button data-tab="grid" class="active">Журнал (сетка)</button>
+  <button data-tab="students">Ученики</button>
+  <button data-tab="ktp">КТП / темы</button>
+  <button data-tab="hw">Домашние задания</button>
+  <button data-tab="hwfill">ДЗ по ученикам</button>
+  <button data-tab="grades">Оценки</button>
+  <button data-tab="attendance">Пропуски</button>
+  <button data-tab="report">Отчёт по ученику</button>
+</nav>
+
+<div class="toolbar">
+  <button id="btnExport" onclick="exportExcel()">💾 Сохранить в Excel</button>
+  <button id="btnImport" onclick="document.getElementById('fileImport').click()">📂 Загрузить из Excel</button>
+  <button id="btnTemplate" onclick="downloadTemplate()">📄 Шаблон Excel</button>
+  <button id="btnDocx" onclick="document.getElementById('fileDocx').click()">📄 Загрузить DOCX</button>
+  <button id="btnAddTeacherWrap" onclick="addTeacher()" style="display:none">➕ Добавить учителя</button>
+  <button id="btnChangePass" onclick="changeMyPassword()" style="display:none">🔑 Сменить пароль</button>
+  <input type="file" id="fileImport" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this)">
+  <input type="file" id="fileDocx" accept=".docx" style="display:none" onchange="importDocx(this)">
+</div>
+
+<!-- ЖУРНАЛ-СЕТКА -->
+<section id="grid" class="active">
+  <h2>Журнал оценок и пропусков</h2>
+  <div class="formRow">
+    <span class="label">Предмет:</span> <select id="gridSubj" onchange="buildGrid()"></select>
+    <span class="label">Класс:</span> <select id="gridCls" onchange="buildGrid()"></select>
+    <label><input type="checkbox" id="gridShowTopics" onchange="buildGrid()"> темы и ДЗ</label>
+    <button class="save" onclick="buildGrid()">Показать</button>
+  </div>
+  <p class="gridHint">Клик по пустой клетке — поставить оценку (можно несколько через запятую).
+     Клик по клетке с оценкой — изменить. Клик по <b>дате в шапке</b> — тема, тип урока и ДЗ.
+     Красная клетка — пропуск: клик, чтобы сменить или снять причину.
+     Зелёные клетки — четвертные оценки, синяя — годовая.</p>
+  <div class="table-wrapper">
+    <table id="gridTable" class="grid-table"></table>
+  </div>
+</section>
+
+<!-- УЧЕНИКИ -->
+<section id="students">
+  <h2>Классы и ученики</h2>
+  <div class="formRow">
+    <span class="label">Предмет:</span> <input id="subj" placeholder="Например: Математика" style="width:220px">
+    <button class="save" onclick="addSubject()">Добавить предмет</button>
+  </div>
+  <div class="formRow">
+    <span class="label">Класс:</span> <input id="cls" placeholder="7А" style="width:80px">
+    <span class="label">ФИО:</span> <input id="fio" placeholder="Иванов Иван" style="width:220px">
+    <button class="save" onclick="addStudent()">Добавить ученика</button>
+  </div>
+  <h3>Список</h3>
+  <table id="studentsTable"></table>
+</section>
+
+<!-- КТП -->
+<section id="ktp">
+  <h2>Календарно-тематическое планирование</h2>
+  <div class="formRow">
+    <span class="label">Предмет:</span> <select id="ktpSubj"></select>
+    <span class="label">Класс:</span> <select id="ktpCls"></select>
+    <span class="label">Дата:</span> <input type="date" id="ktpDate">
+    <span class="label">№ урока:</span> <input id="ktpNum" type="number" style="width:70px">
+    <span class="label">Тип:</span>
+    <select id="ktpType">
+      <option>урок</option><option>КТ/КР</option><option>самост. работа</option>
+      <option>тест</option><option>лабораторная</option><option>экскурсия</option><option>проект</option>
+    </select>
+  </div>
+  <div class="formRow">
+    <span class="label">Тема:</span> <input id="ktpTopic" placeholder="Тема урока" style="width:300px">
+    <span class="label">ДЗ:</span> <input id="ktpHw" placeholder="Домашнее задание" style="width:220px">
+    <button class="save" onclick="addLesson()">Добавить урок</button>
+  </div>
+  <div class="table-wrapper"><table id="ktpTable"></table></div>
+</section>
+
+<!-- ДЗ НА ДАТУ -->
+<section id="hw">
+  <h2>Домашние задания на дату</h2>
+  <div class="formRow">
+    <span class="label">Дата:</span> <input type="date" id="hwDate">
+    <span class="label">Класс:</span> <select id="hwCls"></select>
+    <button class="save" onclick="showHw()">Показать</button>
+  </div>
+  <div class="table-wrapper"><table id="hwTable"></table></div>
+</section>
+
+<!-- ЗАПОЛНЕНИЕ ДЗ ПО УЧЕНИКАМ -->
+<section id="hwfill">
+  <h2>Заполнение ДЗ по ученикам</h2>
+  <div class="formRow">
+    <span class="label">Предмет:</span> <select id="hwfSubj"></select>
+    <span class="label">Класс:</span> <select id="hwfCls"></select>
+    <span class="label">Дата:</span> <input type="date" id="hwfDate">
+    <button class="save" onclick="showHwFill()">Загрузить список</button>
+  </div>
+  <div id="hwfTopic"></div>
+  <p>Отметьте, кто сдал домашнее задание, и нажмите одну кнопку «Сохранить всех».</p>
+  <div class="table-wrapper"><table id="hwFillTable"></table></div>
+</section>
+
+<!-- ОЦЕНКИ -->
+<section id="grades">
+  <h2>Выставление оценок списком</h2>
+  <div class="formRow">
+    <span class="label">Предмет:</span> <select id="grSubj"></select>
+    <span class="label">Класс:</span> <select id="grCls"></select>
+    <span class="label">Дата:</span> <input type="date" id="grDate">
+    <span class="label">Тип:</span>
+    <select id="grType"><option>ответ</option><option>ДЗ</option><option>КТ/КР</option><option>самост. работа</option><option>тест</option></select>
+    <button class="save" onclick="showGradeForm()">Загрузить список</button>
+  </div>
+  <p>У отсутствующих в этот день учеников рядом с фамилией видна отметка УП / Б / НП.</p>
+  <div class="table-wrapper"><table id="gradesTable"></table></div>
+</section>
+
+<!-- ПРОПУСКИ -->
+<section id="attendance">
+  <h2>Посещаемость</h2>
+  <div class="formRow">
+    <span class="label">Класс:</span> <select id="attCls"></select>
+    <span class="label">Дата:</span> <input type="date" id="attDate">
+    <span class="label">Причина:</span>
+    <select id="attReason">
+      <option value="УП">УП (уважительная причина)</option>
+      <option value="Б">Б (болел)</option>
+      <option value="НП">НП (неуважительная)</option>
+    </select>
+    <button class="save" onclick="showAttendance()">Загрузить список</button>
+  </div>
+  <p>Кликайте по ячейке, чтобы отметить пропуск (повторный клик — снять).</p>
+  <div class="table-wrapper"><table id="attTable"></table></div>
+  <h3>Статистика пропусков</h3>
+  <div class="table-wrapper"><table id="attStats"></table></div>
+</section>
+
+<!-- ОТЧЁТ -->
+<section id="report">
+  <h2>Отчёт по ученику</h2>
+  <div class="formRow">
+    <span class="label">Класс:</span> <select id="repCls" onchange="fillRepStudents()"></select>
+    <span class="label">Ученик:</span> <select id="repStudent"></select>
+    <button class="save" onclick="showReport()">Показать</button>
+  </div>
+  <div class="table-wrapper"><table id="reportTable"></table></div>
+</section>
+
+<script>
+// ---------- ХРАНИЛИЩЕ ----------
+const DB_KEY = 'schoolJournal_v2';
+let db = JSON.parse(localStorage.getItem(DB_KEY) || '{"subjects":[],"students":[],"teachers":[]}');
+if (!db.teachers) db.teachers = [];
+if (!db.subjects) db.subjects = [];
+if (!db.students) db.students = [];
+if (!db.lessons) db.lessons = [];
+db.students.forEach(s => {
+  if (!s.grades) s.grades = [];
+  if (!s.absents) s.absents = [];
+  if (!s.hw) s.hw = [];
+  if (!s.quarter) s.quarter = {};
+});
+function save(){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
+
+// ---------- ВСПОМОГАТЕЛЬНОЕ ----------
+function v(id){ return document.getElementById(id).value; }
+function esc(s){
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function normReason(r){
+  r = String(r||'').trim().toUpperCase().replace(/[\s.]/g,'');
+  if (r === 'УП' || r.startsWith('УВАЖ')) return 'УП';
+  if (r === 'Б' || r.startsWith('БОЛ')) return 'Б';
+  return 'НП';
+}
+
+// ---------- ВХОД ПО ПАРОЛЮ ----------
+const SESSION_KEY = 'journalAuthUser';
+const REMEMBER_KEY = 'journalAuthRemember';
+function hashPass(s){
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = (((h << 5) + h) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+function showWhoAmI(){
+  const name = sessionStorage.getItem(SESSION_KEY);
+  document.getElementById('whoAmI').innerHTML = name
+    ? '<span class="name">👩‍🏫 ' + esc(name) + '</span><button onclick="logout()">Выйти</button>' : '';
+  const logged = !!name;
+  ['btnAddTeacherWrap','btnChangePass'].forEach(id =>
+    document.getElementById(id).style.display = logged ? 'inline-block' : 'none');
+}
+function enterAs(name, remember){
+  sessionStorage.setItem(SESSION_KEY, name);
+  if (remember) localStorage.setItem(REMEMBER_KEY, name);
+  else localStorage.removeItem(REMEMBER_KEY);
+  document.getElementById('authOverlay').style.display = 'none';
+  showWhoAmI();
+  refreshSelects();
+  renderStudents();
+  renderKtp();
+  buildGrid();
+}
+function showLogin(){
+  document.getElementById('loginBlock').style.display = 'block';
+  document.getElementById('registerBlock').style.display = 'none';
+  document.getElementById('authMsg').textContent = '';
+}
+function showRegister(){
+  document.getElementById('loginBlock').style.display = 'none';
+  document.getElementById('registerBlock').style.display = 'block';
+  document.getElementById('regMsg').textContent = '';
+}
+function logout(){
+  sessionStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(REMEMBER_KEY);
+  showWhoAmI();
+  document.getElementById('authOverlay').style.display = 'flex';
+  document.getElementById('authPass').value = '';
+  showLogin();
+}
+function doRegister(){
+  const name = document.getElementById('regName').value.trim();
+  const pass = document.getElementById('regPass').value;
+  if (!name) { document.getElementById('regMsg').textContent = 'Введите имя'; return; }
+  if (pass.length < 4) { document.getElementById('regMsg').textContent = 'Пароль — минимум 4 символа'; return; }
+  const remember = document.getElementById('rememberMe').checked;
+  if (db.teachers.some(t => t.name === name)) {
+    document.getElementById('regMsg').textContent = 'Учитель с таким именем уже есть — нажмите «Есть аккаунт» и войдите';
+    return;
+  }
+  db.teachers.push({ login: '26', name, hash: hashPass(pass) });
+  save();
+  enterAs(name, remember);
+}
+function doLogin(){
+  const name = document.getElementById('authName').value.trim();
+  const pass = document.getElementById('authPass').value;
+  const msg = document.getElementById('authMsg');
+  if (!name) { msg.textContent = 'Введите имя учителя'; return; }
+  const remember = document.getElementById('rememberMe').checked;
+  const t = db.teachers.find(x => x.name === name);
+  if (!t) {
+    if (confirm('На этом устройстве ещё нет учителя «' + name + '».\n\nСоздать аккаунт с этим именем и паролем?\nТак вы сможете входить под одним именем с любого устройства.')) {
+      if (pass.length < 4) { msg.textContent = 'Пароль — минимум 4 символа'; return; }
+      db.teachers.push({ login: '26', name, hash: hashPass(pass) });
+      save();
+      enterAs(name, remember);
+    }
+    return;
+  }
+  if (t.hash !== hashPass(pass)) { msg.textContent = 'Неверный пароль'; return; }
+  enterAs(t.name, remember);
+}
+function addTeacher(){
+  const name = prompt('Имя нового учителя:');
+  if (!name) return;
+  const pass = prompt('Пароль для ' + name + ' (минимум 4 символа):');
+  if (!pass || pass.length < 4) return alert('Пароль слишком короткий');
+  db.teachers.push({ login: '26', name: name.trim(), hash: hashPass(pass) });
+  save(); alert('Учитель добавлен. Вход — по имени и паролю.');
+}
+function changeMyPassword(){
+  const oldP = prompt('Старый пароль:');
+  if (oldP === null) return;
+  const name = sessionStorage.getItem(SESSION_KEY);
+  const t = db.teachers.find(t => t.name === name);
+  if (!t || t.hash !== hashPass(oldP)) return alert('Старый пароль неверный');
+  const newP = prompt('Новый пароль (минимум 4 символа):');
+  if (!newP || newP.length < 4) return alert('Пароль слишком короткий');
+  t.hash = hashPass(newP); save();
+  alert('Пароль изменён');
+}
+(function initAuth(){
+  const remembered = localStorage.getItem(REMEMBER_KEY);
+  if (remembered) {
+    enterAs(remembered, true);
+    return;
+  }
+  if (sessionStorage.getItem(SESSION_KEY)) {
+    document.getElementById('authOverlay').style.display = 'none';
+  } else if (db.teachers.length === 0) {
+    showRegister();
+  } else {
+    showLogin();
+  }
+  showWhoAmI();
+})();
+
+// ---------- ВКЛАДКИ ----------
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('section').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  document.getElementById(b.dataset.tab).classList.add('active');
+  refreshSelects();
+  if (b.dataset.tab === 'grid') buildGrid();
+});
+refreshSelects();
+
+// ---------- СЕТКА ЖУРНАЛА ----------
+const QNAMES = ['Ч1','Ч2','Ч3','Ч4'];
+function fmtDateShort(d){
+  const m = String(d||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? m[3] + '.' + m[2] : d;
+}
+function buildGrid(){
+  const cls = v('gridCls'), subj = v('gridSubj');
+  const showT = document.getElementById('gridShowTopics').checked;
+  const el = document.getElementById('gridTable');
+  if (!cls || !subj) { el.innerHTML = '<tr><td class="empty">Выберите предмет и класс</td></tr>'; return; }
+
+  const lessons = (db.lessons||[]).filter(l => l.cls===cls && l.subj===subj);
+  const dates = new Set(lessons.map(l => l.date));
+  db.students.filter(s => s.cls===cls).forEach(s =>
+    s.grades.filter(g => g.subj===subj).forEach(g => dates.add(g.date)));
+  const dArr = [...dates].sort().filter(Boolean);
+
+  if (!dArr.length) { el.innerHTML = '<tr><td class="empty">Для этого предмета и класса пока нет уроков и оценок</td></tr>'; return; }
+
+  const lessonBy = d => lessons.find(l => l.date===d);
+
+  let html = '<tr><th class="namecol" style="text-align:left">Ученик</th>';
+  dArr.forEach(d => {
+    const l = lessonBy(d);
+    html += '<th class="datecol" title="' + esc(l ? l.topic : '') + '"'
+      + ' onclick="editLessonCell(\'' + d + '\',\'' + esc(cls) + '\',\'' + esc(subj) + '\')">'
+      + fmtDateShort(d)
+      + (l && l.type && l.type !== 'урок' ? '<br><span class="lessonType">' + esc(l.type) + '</span>' : '')
+      + (l && l.num ? '<br><span class="lessonNum">ур. ' + esc(l.num) + '</span>' : '')
+      + '</th>';
+  });
+  QNAMES.forEach(q => html += '<th style="min-width:38px">' + q + '</th>');
+  html += '<th style="min-width:38px">Год</th><th>Средн.</th><th>УП/Б/НП</th></tr>';
+
+  if (showT) {
+    html += '<tr><td class="topicRow"><b>Тема / ДЗ</b></td>';
+    dArr.forEach(d => {
+      const l = lessonBy(d);
+      html += '<td class="topicRow">'
+        + (l ? esc(l.topic) + (l.hw ? '<br><b>ДЗ:</b> ' + esc(l.hw) : '') : '—')
+        + '</td>';
+    });
+    html += '<td class="topicRow" colspan="7"></td></tr>';
+  }
+
+  db.students.filter(s => s.cls===cls).forEach(s => {
+    const idx = db.students.indexOf(s);
+    html += '<tr><td class="namecol">' + esc(s.fio) + '</td>';
+    dArr.forEach(d => {
+      const abs = s.absents.find(x => x.date===d);
+      const gs = s.grades.filter(g => g.subj===subj && g.date===d);
+      if (abs)
+        html += '<td class="cellAbs" onclick="cellAbsent(' + idx + ',\'' + d + '\')">' + esc(abs.reason) + '</td>';
+      else
+        html += '<td class="cellMark" onclick="cellEdit(' + idx + ',\'' + d + '\',\'' + esc(subj) + '\')">'
+          + gs.map(g => g.mark).join(' ') + '</td>';
+    });
+    QNAMES.forEach(q => {
+      const qv = (s.quarter[subj] || {})[q];
+      html += '<td class="cellQ" onclick="setQuarter(' + idx + ',\'' + esc(subj) + '\',\'' + q + '\')">'
+        + (qv || '') + '</td>';
+    });
+    const yv = (s.quarter[subj] || {}).year;
+    html += '<td class="cellYear" onclick="setQuarter(' + idx + ',\'' + esc(subj) + '\',\'year\')">'
+      + (yv || '') + '</td>';
+    const m = s.grades.filter(g => g.subj===subj).map(g => g.mark);
+    const avg = m.length ? (m.reduce((a,b)=>a+b,0)/m.length).toFixed(2) : '—';
+    const c = { УП:0, Б:0, НП:0 };
+    s.absents.forEach(a => c[a.reason] !== undefined && c[a.reason]++);
+    html += '<td class="cellAvg">' + avg + '</td>'
+      + '<td style="font-size:11px">' + c.УП + ' / ' + c.Б + ' / ' + c.НП + '</td></tr>';
+  });
+  el.innerHTML = html;
+}
+function editLessonCell(d, cls, subj){
+  let l = (db.lessons||[]).find(x => x.date===d && x.cls===cls && x.subj===subj);
+  const topic = prompt('Тема урока за ' + d + ':', l ? l.topic : '');
+  if (topic === null) return;
+  const type = prompt('Тип урока (урок, КТ/КР, самост. работа, тест, лабораторная, экскурсия, проект):', l ? l.type : 'урок');
+  if (type === null) return;
+  const hw = prompt('Домашнее задание:', l ? l.hw : '');
+  if (hw === null) return;
+  const num = prompt('№ урока:', l ? l.num : '');
+  if (num === null) return;
+  if (!topic.trim()) return;
+  if (l) {
+    l.topic = topic.trim();
+    l.type = type.trim() || 'урок';
+    l.hw = hw.trim();
+    l.num = num.trim();
+  } else {
+    db.lessons.push({ cls, subj, date: d, topic: topic.trim(), type: type.trim() || 'урок', hw: hw.trim(), num: num.trim() });
+  }
+  save();
+  buildGrid();
+  renderKtp();
+}
+function cellEdit(idx, d, subj){
+  const s = db.students[idx];
+  const existing = s.grades.filter(g => g.subj===subj && g.date===d);
+  const cur = existing.map(g => g.mark).join(', ');
+  const inp = prompt('Ученик: ' + s.fio + '\nДата: ' + d + '\nОценки через запятую (2–5). Пусто — удалить:', cur);
+  if (inp === null) return;
+  s.grades = s.grades.filter(g => !(g.subj===subj && g.date===d));
+  inp.split(/[,\s]+/).map(x => parseInt(x,10))
+     .filter(m => m >= 2 && m <= 5)
+     .forEach(m => s.grades.push({ subj, date: d, type: 'урок', mark: m, note: '' }));
+  save(); buildGrid();
+}
+function cellAbsent(idx, d){
+  const s = db.students[idx];
+  const abs = s.absents.find(x => x.date===d);
+  if (abs) {
+    if (confirm('Снять отметку ' + abs.reason + ' у ' + s.fio + ' за ' + d + '?')) {
+      s.absents = s.absents.filter(x => x.date !== d);
+      save(); buildGrid(); showAttendance();
+    }
+  } else {
+    const r = prompt('Причина пропуска у ' + s.fio + ' за ' + d + ' (УП, Б или НП):', 'Б');
+    if (r) { s.absents.push({ date: d, reason: normReason(r) }); save(); buildGrid(); showAttendance(); }
+  }
+}
+function setQuarter(idx, subj, q){
+  const s = db.students[idx];
+  if (!s.quarter[subj]) s.quarter[subj] = {};
+  const label = (q === 'year') ? 'годовую' : q;
+  const inp = prompt(s.fio + ': ' + label + ' оценка (2–5, пусто — удалить):', s.quarter[subj][q] || '');
+  if (inp === null) return;
+  const val = inp.trim();
+  if (!val) {
+    delete s.quarter[subj][q];
+  } else {
+    const n = parseInt(val, 10);
+    if (n < 2 || n > 5) { alert('Оценка должна быть от 2 до 5'); return; }
+    s.quarter[subj][q] = n;
+  }
+  save(); buildGrid();
+}
+
+// ---------- УЧЕНИКИ ----------
+function addSubject(){
+  const s = document.getElementById('subj').value.trim();
+  if (!s) return alert('Введите название предмета');
+  if (!db.subjects.includes(s)) { db.subjects.push(s); save(); refreshSelects(); }
+  document.getElementById('subj').value = '';
+}
+function addStudent(){
+  const cls = document.getElementById('cls').value.trim();
+  const fio = document.getElementById('fio').value.trim();
+  if (!cls || !fio) return alert('Укажите класс и ФИО');
+  db.students.push({ cls, fio, grades: [], absents: [], hw: [], quarter: {} });
+  save();
+  document.getElementById('fio').value = '';
+  renderStudents(); refreshSelects();
+}
+function delStudent(i){ db.students.splice(i,1); save(); renderStudents(); refreshSelects(); }
+function renderStudents(){
+  const el = document.getElementById('studentsTable');
+  if (!db.students.length) { el.innerHTML = '<tr><td class="empty">Учеников пока нет — добавьте выше или загрузите из Excel/DOCX</td></tr>'; return; }
+  let html = '<tr><th>Класс</th><th>ФИО</th><th></th></tr>';
+  db.students.forEach((s,i) =>
+    html += '<tr><td>' + esc(s.cls) + '</td><td>' + esc(s.fio) + '</td>'
+      + '<td class="del" onclick="delStudent(' + i + ')">✕</td></tr>');
+  el.innerHTML = html;
+}
+renderStudents();
+
+// ---------- КТП ----------
+function addLesson(){
+  const k = { subj: v('ktpSubj'), cls: v('ktpCls'), date: v('ktpDate'),
+              num: v('ktpNum'), type: v('ktpType'),
+              topic: v('ktpTopic').trim(), hw: v('ktpHw').trim() };
+  if (!k.subj || !k.cls || !k.date || !k.topic) return alert('Заполните предмет, класс, дату и тему');
+  db.lessons = db.lessons || [];
+  db.lessons.push(k); save(); renderKtp(); buildGrid();
+}
+function renderKtp(){
+  const cls = v('ktpCls'), subj = v('ktpSubj');
+  const list = (db.lessons||[]).filter(l => (!cls||l.cls===cls) && (!subj||l.subj===subj))
+                              .sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const el = document.getElementById('ktpTable');
+  if (!list.length) { el.innerHTML = '<tr><td class="empty">Уроков пока нет</td></tr>'; return; }
+  let html = '<tr><th>№</th><th>Дата</th><th>Предмет</th><th>Класс</th><th>Тип</th><th>Тема</th><th>ДЗ</th><th></th></tr>';
+  list.forEach(l => {
+    const idx = (db.lessons||[]).indexOf(l);
+    html += '<tr><td>' + esc(l.num||'') + '</td><td>' + fmtDateShort(l.date) + '</td>'
+      + '<td>' + esc(l.subj) + '</td><td>' + esc(l.cls) + '</td>'
+      + '<td>' + esc(l.type||'урок') + '</td><td>' + esc(l.topic) + '</td><td>' + esc(l.hw||'—') + '</td>'
+      + '<td class="del" onclick="delLessonIdx(' + idx + ')">✕</td></tr>';
+  });
+  el.innerHTML = html;
+}
+function delLessonIdx(i){ db.lessons.splice(i,1); save(); renderKtp(); buildGrid(); }
+['ktpSubj','ktpCls'].forEach(id => document.addEventListener('change', e => { if (e.target.id===id) renderKtp(); }));
+renderKtp();
+
+// ---------- ДЗ НА ДАТУ ----------
+function showHw(){
+  const date = v('hwDate'), cls = v('hwCls');
+  if (!date || !cls) return alert('Выберите дату и класс');
+  const lessons = (db.lessons||[]).filter(l => l.date===date && l.cls===cls);
+  let html = '<tr><th>Предмет</th><th>№ урока</th><th>Тип</th><th>Тема</th><th>Домашнее задание</th></tr>';
+  html += lessons.length ? lessons.map(l =>
+    '<tr><td>' + esc(l.subj) + '</td><td>' + esc(l.num||'') + '</td><td>' + esc(l.type||'урок')
+    + '</td><td>' + esc(l.topic) + '</td><td>' + esc(l.hw||'—') + '</td></tr>').join('')
+    : '<tr><td colspan="5" class="empty">На эту дату уроки не запланированы</td></tr>';
+  document.getElementById('hwTable').innerHTML = html;
+}
+
+// ---------- ЗАПОЛНЕНИЕ ДЗ ПО УЧЕНИКАМ ----------
+function showHwFill(){
+  const cls = v('hwfCls'), subj = v('hwfSubj'), date = v('hwfDate');
+  if (!cls || !subj || !date) return alert('Выберите предмет, класс и дату');
+  const lesson = (db.lessons||[]).find(l => l.cls===cls && l.subj===subj && l.date===date);
+  document.getElementById('hwfTopic').innerHTML = lesson
+    ? '<p class="topicNote">Тема урока: ' + esc(lesson.topic) + '. ДЗ из КТП: ' + esc(lesson.hw || '—') + '</p>'
+    : '<p class="topicNote">На эту дату урока в КТП нет — можно заполнять без темы.</p>';
+  const opts = ['сдано', 'не сдано', 'частично'];
+  let html = '<tr><th>Ученик</th><th>ДЗ выполнено</th><th>Примечание</th></tr>';
+  db.students.filter(s => s.cls===cls).forEach(s => {
+    const idx = db.students.indexOf(s);
+    const abs = s.absents.find(x => x.date===date);
+    const h = s.hw.find(x => x.subj===subj && x.date===date);
+    html += '<tr><td>' + esc(s.fio) + (abs ? ' <span class="absentMark">' + esc(abs.reason) + '</span>' : '') + '</td>'
+      + '<td><select id="hwst_' + idx + '">' + opts.map(o =>
+        '<option ' + (h && h.status===o ? 'selected' : '') + '>' + o + '</option>').join('') + '</select></td>'
+      + '<td><input id="hwn_' + idx + '" value="' + esc(h ? h.note : '') + '" style="width:170px"></td></tr>';
+  });
+  html += '<tr><td colspan="3">'
+    + '<button class="saveall" onclick="saveAllHw(\'' + esc(cls) + '\',\'' + esc(subj) + '\',\'' + date + '\')">💾 Сохранить всех</button>'
+    + '</td></tr>';
+  document.getElementById('hwFillTable').innerHTML = html;
+}
+function saveAllHw(cls, subj, date){
+  let n = 0;
+  db.students.filter(s => s.cls===cls).forEach(s => {
+    const idx = db.students.indexOf(s);
+    const st = document.getElementById('hwst_'+idx);
+    const nt = document.getElementById('hwn_'+idx);
+    if (!st) return;
+    const status = st.value, note = nt ? nt.value.trim() : '';
+    const old = s.hw.find(x => x.subj===subj && x.date===date);
+    if (old) Object.assign(old, { status, note });
+    else s.hw.push({ subj, date, status, note });
+    n++;
+  });
+  save(); alert('Сохранено записей ДЗ: ' + n);
+}
+
+// ---------- ОЦЕНКИ ----------
+function showGradeForm(){
+  const cls = v('grCls'), subj = v('grSubj'), date = v('grDate'), type = v('grType');
+  if (!cls || !subj || !date) return alert('Выберите предмет, класс и дату');
+  let html = '<tr><th>Ученик</th><th>Оценка (2–5)</th><th>Комментарий</th></tr>';
+  db.students.filter(s => s.cls===cls).forEach(s => {
+    const idx = db.students.indexOf(s);
+    const abs = s.absents.find(x => x.date===date);
+    const g = s.grades.find(g => g.subj===subj && g.date===date && g.type===type);
+    const absentBadge = abs ? ' <span class="absentMark">' + esc(abs.reason) + '</span>' : '';
+    const markCell = abs
+      ? '<td><input value="" id="g_' + idx + '" style="width:60px" disabled placeholder="—"></td>'
+      : '<td><input value="' + (g ? g.mark : '') + '" id="g_' + idx + '" style="width:60px"></td>';
+    const noteCell = abs
+      ? '<td><input value="" id="n_' + idx + '" style="width:170px" disabled placeholder="нет на уроке"></td>'
+      : '<td><input value="' + esc(g ? g.note : '') + '" id="n_' + idx + '" style="width:170px"></td>';
+    html += '<tr><td>' + esc(s.fio) + absentBadge + '</td>' + markCell + noteCell + '</tr>';
+  });
+  html += '<tr><td colspan="3">'
+    + '<button class="saveall" onclick="saveAllGrades(\'' + esc(cls) + '\',\'' + esc(subj) + '\',\'' + date + '\',\'' + esc(type) + '\')">💾 Сохранить всех</button>'
+    + '</td></tr>';
+  document.getElementById('gradesTable').innerHTML = html;
+}
+function saveAllGrades(cls, subj, date, type){
+  let n = 0;
+  db.students.filter(s => s.cls===cls).forEach(s => {
+    const idx = db.students.indexOf(s);
+    const gEl = document.getElementById('g_'+idx);
+    if (!gEl || gEl.disabled) return;
+    const mark = gEl.value.trim();
+    if (!mark) return;
+    const noteEl = document.getElementById('n_'+idx);
+    const note = noteEl ? noteEl.value.trim() : '';
+    const old = s.grades.find(g => g.subj===subj && g.date===date && g.type===type);
+    if (old) Object.assign(old, { mark: +mark, note });
+    else s.grades.push({ subj, date, type, mark: +mark, note });
+    n++;
+  });
+  save();
+  alert(n ? 'Сохранено оценок: ' + n : 'Нет заполненных оценок');
+  buildGrid();
+}
+
+// ---------- ПРОПУСКИ ----------
+function showAttendance(){
+  const cls = v('attCls'), date = v('attDate');
+  if (!cls || !date) return;
+  let html = '<tr><th>Ученик</th><th>Отметка</th></tr>';
+  db.students.filter(s => s.cls===cls).forEach(s => {
+    const idx = db.students.indexOf(s);
+    const a = s.absents.find(x => x.date===date);
+    html += '<tr><td>' + esc(s.fio) + '</td>'
+      + '<td style="cursor:pointer;' + (a ? 'background:var(--red);color:#fff;border-radius:6px;font-weight:600' : '') + '"'
+      + ' onclick="toggleAbsent(' + idx + ',\'' + date + '\')">' + (a ? esc(a.reason) : '—') + '</td></tr>';
+  });
+  document.getElementById('attTable').innerHTML = html;
+  renderAttStats(cls);
+}
+function toggleAbsent(i, date){
+  const s = db.students[i];
+  const pos = s.absents.findIndex(x => x.date===date);
+  if (pos >= 0) s.absents.splice(pos,1);
+  else s.absents.push({ date, reason: v('attReason') });
+  save(); showAttendance(); buildGrid();
+}
+function renderAttStats(cls){
+  let html = '<tr><th>Ученик</th><th>УП</th><th>Б</th><th>НП</th><th>Всего</th></tr>';
+  db.students.filter(s => s.cls===cls).forEach(s => {
+    const c = { УП:0, Б:0, НП:0 };
+    s.absents.forEach(a => c[a.reason] !== undefined && c[a.reason]++);
+    html += '<tr><td>' + esc(s.fio) + '</td><td>' + c.УП + '</td><td>' + c.Б + '</td><td>' + c.НП + '</td><td>' + (c.УП+c.Б+c.НП) + '</td></tr>';
+  });
+  document.getElementById('attStats').innerHTML = html;
+}
+
+// ---------- ОТЧЁТ ----------
+function showReport(){
+  const idx = +v('repStudent');
+  if (isNaN(idx) || !db.students[idx]) return alert('Выберите ученика');
+  const s = db.students[idx];
+  const bySubj = {};
+  s.grades.forEach(g => { (bySubj[g.subj] = bySubj[g.subj] || []).push(g.mark); });
+  const byHw = {};
+  s.hw.forEach(h => { (byHw[h.subj] = byHw[h.subj] || []).push(h.status); });
+  let html = '<tr><th>Ученик</th><th>Предмет</th><th>Оценки</th><th>Средний балл</th>'
+    + '<th>Ч1</th><th>Ч2</th><th>Ч3</th><th>Ч4</th><th>Год</th>'
+    + '<th>ДЗ (сдано / всего)</th><th>Пропусков (УП/Б/НП)</th></tr>';
+  const abs = { УП:0, Б:0, НП:0 };
+  s.absents.forEach(a => abs[a.reason] !== undefined && abs[a.reason]++);
+  const keys = Object.keys(bySubj);
+  const allKeys = [...new Set([...keys, ...Object.keys(byHw)])];
+  if (!allKeys.length) { html += '<tr><td colspan="11" class="empty">Оценок и ДЗ пока нет</td></tr>'; }
+  allKeys.forEach(subj => {
+    const m = bySubj[subj] || [];
+    const avg = m.length ? (m.reduce((a,b)=>a+b,0)/m.length).toFixed(2) : '—';
+    const q = s.quarter[subj] || {};
+    const hwArr = byHw[subj] || [];
+    const hwDone = hwArr.filter(x => x==='сдано').length;
+    const hwCell = hwArr.length ? (hwDone + ' / ' + hwArr.length) : '—';
+    html += '<tr><td>' + esc(s.fio) + '</td><td>' + esc(subj) + '</td><td>' + (m.join(', ')||'—') + '</td><td>' + avg + '</td>'
+      + '<td>' + (q['Ч1']||'—') + '</td><td>' + (q['Ч2']||'—') + '</td>'
+      + '<td>' + (q['Ч3']||'—') + '</td><td>' + (q['Ч4']||'—') + '</td>'
+      + '<td><b>' + (q.year||'—') + '</b></td><td>' + hwCell + '</td>'
+      + '<td rowspan="' + allKeys.length + '">' + abs.УП + ' / ' + abs.Б + ' / ' + abs.НП + '</td></tr>';
+  });
+  document.getElementById('reportTable').innerHTML = html;
+}
+
+// ---------- ЭКСПОРТ В EXCEL ----------
+function exportExcel(){
+  if (typeof XLSX === 'undefined') return alert('Библиотека Excel не загрузилась. Проверьте интернет при первом открытии файла.');
+  const wb = XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    db.students.map(s => ({ 'Класс': s.cls, 'ФИО': s.fio }))
+  ), 'Ученики');
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(
+    (db.lessons||[]).map(l => ({ 'Предмет': l.subj, 'Класс': l.cls, 'Дата': l.date,
+                                 '№ урока': l.num, 'Тип': l.type || 'урок', 'Тема': l.topic, 'ДЗ': l.hw }))
+  ), 'КТП');
+
+  const hwRows = [];
+  db.students.forEach(s => s.hw.forEach(h =>
+    hwRows.push({ 'Класс': s.cls, 'ФИО': s.fio, 'Предмет': h.subj, 'Дата': h.date,
+                  'Статус ДЗ': h.status, 'Примечание': h.note })));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(hwRows), 'ДЗ по ученикам');
+
+  const gradesRows = [];
+  db.students.forEach(s => s.grades.forEach(g =>
+    gradesRows.push({ 'Класс': s.cls, 'ФИО': s.fio, 'Предмет': g.subj, 'Дата': g.date,
+                      'Тип': g.type, 'Оценка': g.mark, 'Комментарий': g.note })));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(gradesRows), 'Оценки');
+
+  const qRows = [];
+  db.students.forEach(s => Object.keys(s.quarter||{}).forEach(subj => {
+    const q = s.quarter[subj];
+    qRows.push({ 'Класс': s.cls, 'ФИО': s.fio, 'Предмет': subj,
+                 'Ч1': q['Ч1']||'', 'Ч2': q['Ч2']||'', 'Ч3': q['Ч3']||'', 'Ч4': q['Ч4']||'', 'Год': q.year||'' });
+  }));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(qRows), 'Четверти и год');
+
+  const absRows = [];
+  db.students.forEach(s => s.absents.forEach(a =>
+    absRows.push({ 'Класс': s.cls, 'ФИО': s.fio, 'Дата': a.date, 'Причина': a.reason })));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(absRows), 'Пропуски');
+
+  const d = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'моя_школа_' + d + '.xlsx');
+}
+
+// ---------- ШАБЛОН EXCEL ----------
+function downloadTemplate(){
+  if (typeof XLSX === 'undefined') return alert('Библиотека Excel не загрузилась. Проверьте интернет при первом открытии файла.');
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Класс','ФИО']]), 'Ученики');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Предмет','Класс','Дата','№ урока','Тип','Тема','ДЗ']]), 'КТП');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Класс','ФИО','Предмет','Дата','Статус ДЗ','Примечание']]), 'ДЗ по ученикам');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Класс','ФИО','Предмет','Дата','Тип','Оценка','Комментарий']]), 'Оценки');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Класс','ФИО','Предмет','Ч1','Ч2','Ч3','Ч4','Год']]), 'Четверти и год');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Класс','ФИО','Дата','Причина (УП/Б/НП)']]), 'Пропуски');
+  XLSX.writeFile(wb, 'шаблон_журнала.xlsx');
+}
+
+// ---------- ИМПОРТ ИЗ EXCEL ----------
+const ALIAS = {
+  cls:    ['класс'],
+  fio:    ['фио','ф.и.о','ученик','фамилия имя','фамилия, имя'],
+  subj:   ['предмет','дисциплина'],
+  date:   ['дата','дата урока'],
+  num:    ['№ урока','номер урока','№','номер'],
+  topic:  ['тема','тема урока'],
+  hw:     ['дз','д/з','домашнее задание','задание'],
+  type:   ['тип','вид работы','вид'],
+  status: ['статус дз','статус','выполнение','выполнение дз'],
+  mark:   ['оценка','отметка','балл'],
+  note:   ['комментарий','примечание','замечание'],
+  reason: ['причина','причина пропуска','пропуск']
+};
+function norm(s){ return String(s || '').toLowerCase().trim().replace(/\s+/g,' '); }
+function pickHeader(headers, key){
+  for (const h of headers) if (ALIAS[key].includes(norm(h))) return h;
+  return null;
+}
+function toDateStr(val){
+  if (val instanceof Date && !isNaN(val))
+    return val.getFullYear() + '-' + String(val.getMonth()+1).padStart(2,'0') + '-' + String(val.getDate()).padStart(2,'0');
+  const s = String(val || '').trim();
+  let m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (m) return m[3]+'-'+m[2]+'-'+m[1];
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return m[1]+'-'+m[2]+'-'+m[3];
+  return s;
+}
+function normHwStatus(x){
+  x = String(x||'').toLowerCase().trim();
+  if (x.startsWith('не')) return 'не сдано';
+  if (x.startsWith('час') || x === 'н') return 'частично';
+  return 'сдано';
+}
+
+function importExcel(input){
+  if (!input.files.length) return;
+  if (typeof XLSX === 'undefined') return alert('Библиотека Excel не загрузилась. Проверьте интернет при первом открытии файла.');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+      const replace = confirm('Заменить журнал данными из файла?\n\n«ОК» — заменить всё.\n«Отмена» — ДОБАВИТЬ к текущим данным.');
+      const base = replace ? { subjects: [], students: [], lessons: [], teachers: db.teachers } : db;
+      base.students = base.students || []; base.lessons = base.lessons || [];
+      base.subjects = base.subjects || [];
+      base.students.forEach(s => {
+        if (!s.grades) s.grades=[];
+        if (!s.absents) s.absents=[];
+        if (!s.hw) s.hw=[];
+        if (!s.quarter) s.quarter={};
+      });
+      const find = (cls, fio) => base.students.find(s => s.cls===cls && s.fio===fio);
+      const addStudentIfNew = (cls, fio) => {
+        if (cls && fio && !find(cls, fio)) base.students.push({ cls, fio, grades: [], absents: [], hw: [], quarter: {} });
+        return find(cls, fio);
+      };
+      const addSubj = s => { if (s && !base.subjects.includes(s)) base.subjects.push(s); };
+      let cnt = { students:0, lessons:0, hw:0, grades:0, absents:0, quarters:0 };
+
+      wb.SheetNames.forEach(name => {
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], { defval: '' });
+        if (!rows.length) return;
+        const headers = Object.keys(rows[0]);
+        const H = {};
+        ['cls','fio','subj','date','num','topic','hw','type','status','mark','note','reason']
+          .forEach(k => H[k] = pickHeader(headers, k));
+        let kind = null;
+        if (H.mark) kind = 'grades';
+        else if (H.reason) kind = 'absents';
+        else if (H.status) kind = 'hwfill';
+        else if (H.topic) kind = 'lessons';
+        else if (H.fio && H.cls) kind = 'students';
+        else if (H.fio) kind = 'students';
+        if (!kind) return;
+
+        rows.forEach(r => {
+          const fio = String(r[H.fio] || '').trim().replace(/\s+/g,' ');
+          if (kind === 'students') {
+            const before = base.students.length;
+            addStudentIfNew(String(r[H.cls]||'').trim(), fio);
+            if (base.students.length > before) cnt.students++;
+          } else if (kind === 'lessons') {
+            const l = { subj: String(r[H.subj]||'').trim(), cls: String(r[H.cls]||'').trim(),
+                        date: toDateStr(r[H.date]), num: r[H.num]||'',
+                        type: String(r[H.type]||'').trim() || 'урок',
+                        topic: String(r[H.topic]||'').trim(), hw: String(r[H.hw]||'').trim() };
+            if (l.subj && l.cls && l.date && l.topic) { base.lessons.push(l); addSubj(l.subj); cnt.lessons++; }
+          } else if (kind === 'hwfill') {
+            const s = addStudentIfNew(String(r[H.cls]||'').trim(), fio);
+            const subj = String(r[H.subj]||'').trim();
+            const date = toDateStr(r[H.date]);
+            if (!s || !subj || !date) return;
+            s.hw.push({ subj, date, status: normHwStatus(r[H.status]), note: String(r[H.note]||'').trim() });
+            addSubj(subj); cnt.hw++;
+          } else if (kind === 'grades') {
+            const s = addStudentIfNew(String(r[H.cls]||'').trim(), fio);
+            const mark = parseInt(r[H.mark], 10);
+            const subj = String(r[H.subj]||'').trim();
+            if (!s || !mark || !subj) return;
+            s.grades.push({ subj, date: toDateStr(r[H.date]), type: String(r[H.type]||'').trim() || 'работа',
+                            mark, note: String(r[H.note]||'').trim() });
+            addSubj(subj); cnt.grades++;
+          } else if (kind === 'absents') {
+            const s = addStudentIfNew(String(r[H.cls]||'').trim(), fio);
+            const date = toDateStr(r[H.date]);
+            if (!s || !date) return;
+            s.absents.push({ date, reason: normReason(r[H.reason]) }); cnt.absents++;
+          }
+          // Лист «Четверти и год»
+          if (kind === 'students' && r['Предмет'] !== undefined) {
+            const s = find(String(r[H.cls]||'').trim(), fio);
+            const subjQ = String(r['Предмет']||'').trim();
+            if (s && subjQ) {
+              if (!s.quarter[subjQ]) s.quarter[subjQ] = {};
+              ['Ч1','Ч2','Ч3','Ч4'].forEach(qn => {
+                const val = String(r[qn]||'').trim();
+                if (val) { const nn = parseInt(val,10); s.quarter[subjQ][qn] = isNaN(nn) ? val : nn; }
+              });
+              const yv = String(r['Год']||'').trim();
+              if (yv) { const ny = parseInt(yv,10); s.quarter[subjQ].year = isNaN(ny) ? yv : ny; }
+              addSubj(subjQ); cnt.quarters++;
+            }
+          }
+        });
+      });
+
+      db = base; save();
+      renderStudents(); refreshSelects(); renderKtp(); buildGrid();
+      ['gradesTable','hwFillTable','attTable','attStats','reportTable','hwTable'].forEach(id => document.getElementById(id).innerHTML = '');
+      alert('Загрузка завершена:\nучеников — ' + cnt.students + '\nуроков КТП — ' + cnt.lessons +
+            '\nзаписей ДЗ — ' + cnt.hw + '\nоценок — ' + cnt.grades + '\nпропусков — ' + cnt.absents);
+    } catch (err) { alert('Не удалось прочитать файл: ' + err.message); }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(input.files[0]);
+}
+
+// ---------- ИМПОРТ ИЗ DOCX ----------
+function docxToDate(s){
+  const m = String(s).match(/^(\d{1,2})\.(\d{1,2})(?:\.(\d{2,4}))?$/);
+  if (!m) return '';
+  const y = m[3] ? (m[3].length === 2 ? '20'+m[3] : m[3]) : String(new Date().getFullYear());
+  return y + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+}
+function parseDocxLines(html){
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const lines = [];
+  doc.querySelectorAll('p').forEach(p => { const t = p.textContent.trim(); if (t) lines.push(t); });
+  doc.querySelectorAll('table tr').forEach(tr => {
+    const t = [...tr.querySelectorAll('td,th')].map(td => td.textContent.trim()).join(' ').trim();
+    if (t) lines.push(t);
+  });
+  return lines;
+}
+const FIO_RE = /(\d{1,2}\s*[А-Яа-я]{1,2}|[А-Яа-я]{1,2}-?\d{1,2})\s+([А-ЯЁ][а-яё]+(?:\s+[А-ЯЁ][а-яё\-]+){1,2})/;
+
+function importDocx(input){
+  if (!input.files.length) return;
+  if (typeof mammoth === 'undefined') return alert('Библиотека чтения DOCX не загрузилась. Проверьте интернет при первом открытии файла.');
+  const reader = new FileReader();
+  reader.onload = function(e){
+    mammoth.convertToHtml({ arrayBuffer: e.target.result })
+      .then(res => {
+        try {
+          const lines = parseDocxLines(res.value);
+          const students = [], lessons = [];
+          lines.forEach(t => {
+            const m = t.match(FIO_RE);
+            if (m) { students.push({ cls: m[1].replace(/\s+/g,''), fio: m[2] }); return; }
+            const dm = t.match(/(\d{1,2}\.\d{1,2}(?:\.\d{2,4})?)/);
+            if (dm) {
+              const numM = t.match(/^\s*(\d{1,3})[\.\)]?\s/);
+              let topic = t;
+              if (numM) topic = topic.slice(numM[0].length);
+              topic = topic.replace(dm[0], ' ').trim();
+              let hw = '';
+              const hwM = topic.match(/\s*(д\/?з|домашнее задание)\s*:?\s*(.+)$/i);
+              if (hwM) { hw = hwM[2].trim(); topic = topic.slice(0, hwM.index).trim(); }
+              if (topic) lessons.push({ cls:'', subj:'', date: docxToDate(dm[1]),
+                                        num: numM ? numM[1] : '', topic, hw });
+            }
+          });
+
+          if (!students.length && !lessons.length)
+            return alert('В файле не удалось распознать учеников или уроки КТП.\nНужен формат:\n• ученики — строка вида «7А Иванов Иван»;\n• КТП — строка вида «1. 24.02 Тема урока ДЗ: параграф 5» или таблица.');
+
+          db.students = db.students || []; db.lessons = db.lessons || [];
+          let cntS = 0, cntL = 0;
+
+          if (students.length) {
+            const noCls = students.filter(s => !/^\d{1,2}/.test(s.cls)).length;
+            let defCls = '';
+            if (noCls) defCls = prompt('У ' + noCls + ' учеников не найден класс.\nУкажите класс для них (например 7А):', '') || '';
+            students.forEach(s => {
+              const cls = /^\d{1,2}/.test(s.cls) ? s.cls : defCls;
+              if (!cls) return;
+              if (!db.students.some(x => x.cls===cls && x.fio===s.fio)) {
+                db.students.push({ cls, fio: s.fio, grades: [], absents: [], hw: [], quarter: {} });
+                cntS++;
+              }
+            });
+          }
+
+          if (lessons.length) {
+            const cls = prompt('Класс для уроков из этого файла (например 7А):', v('ktpCls') || '');
+            const subj = prompt('Предмет для уроков из этого файла:', v('ktpSubj') || '');
+            if (cls !== null && subj !== null) {
+              lessons.forEach(l => {
+                l.cls = cls.trim(); l.subj = subj.trim();
+                if (l.cls && l.date && l.topic) {
+                  db.lessons.push(l);
+                  if (l.subj && !db.subjects.includes(l.subj)) db.subjects.push(l.subj);
+                  cntL++;
+                }
+              });
+            }
+          }
+
+          save();
+          renderStudents(); refreshSelects(); renderKtp(); buildGrid();
+          alert('Из DOCX загружено:\nучеников — ' + cntS + '\nуроков КТП — ' + cntL);
+        } catch (err) { alert('Не удалось прочитать файл: ' + err.message); }
+        input.value = '';
+      })
+      .catch(err => { alert('Не удалось прочитать файл: ' + err.message); input.value = ''; });
+  };
+  reader.readAsArrayBuffer(input.files[0]);
+}
+
+// ---------- ВЫПАДАЮЩИЕ СПИСКИ ----------
+function refreshSelects(){
+  const classes = [...new Set(db.students.map(s => s.cls))].filter(Boolean);
+  const fill = (id, arr, empty) => {
+    const el = document.getElementById(id); if (!el) return;
+    const cur = el.value;
+    el.innerHTML = (empty ? '<option value="">— выберите —</option>' : '') +
+      arr.map(x => '<option>' + esc(x) + '</option>').join('');
+    if (arr.includes(cur)) el.value = cur;
+  };
+  fill('gridSubj', db.subjects, true);  fill('gridCls', classes, true);
+  fill('ktpSubj', db.subjects, true);   fill('ktpCls', classes, true);
+  fill('hwCls', classes, true);
+  fill('hwfSubj', db.subjects, true);   fill('hwfCls', classes, true);
+  fill('grSubj', db.subjects, true);    fill('grCls', classes, true);
+  fill('attCls', classes, true);
+  fill('repCls', classes, true);        fillRepStudents();
+}
+function fillRepStudents(){
+  const cls = v('repCls');
+  const el = document.getElementById('repStudent');
+  el.innerHTML = '<option value="">— выберите —</option>' +
+    db.students.map((s,i) => ({i, s}))
+      .filter(x => !cls || x.s.cls===cls)
+      .map(x => '<option value="' + x.i + '">' + esc(x.s.fio) + '</option>').join('');
+}
+</script>
+</body>
+</html>
